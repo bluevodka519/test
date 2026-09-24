@@ -39,7 +39,10 @@ class AusPostClient:
     # ---------- configuration ----------
 
     def account_for(self, carrier: Carrier) -> str:
-        return self.s.startrack_account if carrier == Carrier.STARTRACK else self.s.auspost_account
+        if carrier == Carrier.STARTRACK:
+            return self.s.startrack_account
+        account = self.s.auspost_account.strip()
+        return account.zfill(10) if account.isdigit() else account
 
     def product_id_for(self, carrier: Carrier) -> str:
         return self.s.startrack_product_id if carrier == Carrier.STARTRACK else self.s.auspost_product_id
@@ -53,11 +56,26 @@ class AusPostClient:
         }
         return [name for name, value in needed.items() if not value.strip()]
 
+    def account_number_problem(self, carrier: Carrier) -> Optional[str]:
+        """Format rules from the official "REST and authentication" page."""
+        account = self.account_for(carrier).strip()
+        if not account:
+            return None
+        if carrier == Carrier.STARTRACK:
+            if not (len(account) == 8 and account.isdigit() and account[0] != "0"):
+                return (f"StarTrack account numbers are 8 digits and never start with 0; "
+                        f"got {len(account)} digits starting with {account[0]!r}.")
+        elif not (account.isdigit() and len(account) <= 10):
+            return "Australia Post account numbers are up to 10 digits (left-padded with zeros)."
+        return None
+
     def _client(self, carrier: Carrier) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=self.s.auspost_base_url.rstrip("/") + "/",
             auth=(self.s.auspost_api_key, self.s.auspost_password),
-            headers={"Account-Number": self.account_for(carrier), "Accept": "application/json"},
+            # Header set as listed on the official "REST and authentication" page.
+            headers={"Account-Number": self.account_for(carrier), "Accept": "application/json",
+                     "Content-Type": "application/json"},
             timeout=self.s.courier_timeout_seconds,
         )
 
@@ -205,18 +223,17 @@ def parse_track_response(payload: dict, carrier: str) -> dict[str, TrackingResul
             )
             continue
 
-        events = []
-        for item in entry.get("trackable_items", []) or []:
-            for ev in item.get("events", []) or []:
-                events.append(TrackingEvent(
-                    date=ev.get("date"), description=ev.get("description", ""), location=ev.get("location"),
-                ))
+        status, raw_events = _status_and_events(entry)
+        events, seen = [], set()
+        for ev in raw_events:
+            key = (ev.get("date"), ev.get("description"), ev.get("location"))
+            if key in seen:  # documented responses repeat some events
+                continue
+            seen.add(key)
+            events.append(TrackingEvent(
+                date=ev.get("date"), description=ev.get("description", ""), location=ev.get("location") or None,
+            ))
         events.sort(key=lambda ev: ev.date or "", reverse=True)
-
-        status = entry.get("status")
-        if not status:
-            items = entry.get("trackable_items") or []
-            status = items[0].get("status") if items else None
 
         results[no] = TrackingResult(
             status=TrackingStatus.OK if (status or events) else TrackingStatus.NO_DATA,
@@ -227,6 +244,27 @@ def parse_track_response(payload: dict, carrier: str) -> dict[str, TrackingResul
             message="" if (status or events) else "API returned no status or events.",
         )
     return results
+
+
+def _status_and_events(entry: dict) -> tuple[Optional[str], list[dict]]:
+    """Handle every documented Track Items response shape.
+
+    - StarTrack consignments (Aug 2024 format): top-level `consignment` with
+      its own status and events; this is the consignment-level summary.
+    - Australia Post articles: `trackable_items[].events`.
+    - Australia Post consignments: `trackable_items[].items[].events`.
+    """
+    consignment = entry.get("consignment") or {}
+    if isinstance(consignment, dict) and (consignment.get("status") or consignment.get("events")):
+        return consignment.get("status") or entry.get("status"), list(consignment.get("events") or [])
+
+    statuses, events = [], []
+    for item in entry.get("trackable_items", []) or []:
+        for leaf in (item.get("items") or [item]):
+            events += leaf.get("events") or []
+            if leaf.get("status"):
+                statuses.append(leaf["status"])
+    return entry.get("status") or (statuses[0] if statuses else None), events
 
 
 def parse_price_response(payload: dict, product_id: str) -> Optional[Decimal]:

@@ -4,7 +4,7 @@ from decimal import Decimal
 import httpx
 import respx
 
-from app.couriers.auspost import AusPostClient
+from app.couriers.auspost import AusPostClient, parse_track_response
 from app.models import Address, Carrier, FeeSource, TrackingStatus
 from app.services.products import parse_product
 from app.services.shipping import build_parcel, chargeable_kg, formula_fee, quote_shipment, zone_for
@@ -34,6 +34,69 @@ def test_tracking_ok_parses_status_and_latest_event(configured):
     req = route.calls.last.request
     assert req.headers["Account-Number"] == "222"  # StarTrack account
     assert req.headers["Authorization"].startswith("Basic ")
+
+
+# Shapes below are trimmed from the official Track Items reference examples.
+
+def test_parse_startrack_consignment_format():
+    payload = {"tracking_results": [{
+        "tracking_id": "5XXXX0XXXXXX",
+        "consignment": {"status": "Awaiting Collection", "events": [
+            {"location": "NEWTOWN VIC", "description": "Awaiting collection", "date": "2024-08-08T12:51:22+10:00"},
+            {"location": "AVALON VIC", "description": "Onboard for delivery", "date": "2024-08-08T08:41:20+10:00"},
+        ]},
+        "trackable_items": [{"article_id": "5XXXX0XXXXXXFPP00001", "status": "In Transit", "events": [
+            {"location": "NEWTOWN VIC", "description": "In transit", "date": "2024-08-08T12:51:21+10:00"}]}],
+    }]}
+    res = parse_track_response(payload, "STARTRACK")["5XXXX0XXXXXX"]
+    assert res.status == TrackingStatus.OK
+    assert res.current_status == "Awaiting Collection"  # consignment-level summary wins
+    assert res.last_update == "2024-08-08T12:51:22+10:00"
+    assert [e.description for e in res.events] == ["Awaiting collection", "Onboard for delivery"]
+
+
+def test_parse_auspost_nested_consignment_items():
+    payload = {"tracking_results": [{
+        "tracking_id": "33XXX0123456",
+        "trackable_items": [{"consignment_id": "33XXX0123456", "number_of_items": 1, "items": [{
+            "article_id": "33XXX012345601000931502", "status": "Delivered", "events": [
+                {"location": "LIGHTSVIEW SA", "description": "Delivered - Left in a safe place",
+                 "date": "2020-12-29T11:04:08+11:00"},
+                {"description": "Shipping information received by Australia Post", "date": "2020-12-15T23:59:32+11:00"},
+            ]}]}],
+    }]}
+    res = parse_track_response(payload, "AUSPOST")["33XXX0123456"]
+    assert res.current_status == "Delivered"
+    assert len(res.events) == 2
+    assert res.events[1].location is None
+
+
+def test_parse_drops_duplicate_events():
+    ev = {"location": "JOHN F. KENNEDY APT/NEW YORK (US)", "description": "Departed facility",
+          "date": "2014-05-26T05:00:00+10:00"}
+    payload = {"tracking_results": [{"tracking_id": "A", "status": "Delivered",
+                                     "trackable_items": [{"events": [ev, dict(ev)]}]}]}
+    assert len(parse_track_response(payload, "AUSPOST")["A"].events) == 1
+
+
+@respx.mock
+def test_tracking_rate_limited_is_unavailable(configured):
+    respx.get(f"{BASE}/track").mock(return_value=httpx.Response(429, json={"errors": [
+        {"message": "Too many requests", "error_code": "API_002", "error_name": "Too many requests"}]}))
+    res = asyncio.run(AusPostClient(configured).track_many(["X"], Carrier.AUSPOST))["X"]
+    assert res.status == TrackingStatus.UNAVAILABLE
+    assert "429" in res.message and "API_002" in res.message
+
+
+def test_account_number_rules(configured):
+    client = AusPostClient(configured.model_copy(update={"auspost_account": "2004456017",
+                                                         "startrack_account": "04456017"}))
+    assert client.account_number_problem(Carrier.AUSPOST) is None
+    assert "never start with 0" in client.account_number_problem(Carrier.STARTRACK)
+    padded = AusPostClient(configured.model_copy(update={"auspost_account": "123456"}))
+    assert padded.account_for(Carrier.AUSPOST) == "0000123456"
+    ok = AusPostClient(configured.model_copy(update={"startrack_account": "10004456"}))
+    assert ok.account_number_problem(Carrier.STARTRACK) is None
 
 
 @respx.mock

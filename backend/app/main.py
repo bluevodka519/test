@@ -28,9 +28,11 @@ def health():
         "env_vars_set": {name.upper(): bool(str(getattr(settings, name)).strip()) for name in REPORTED_FIELDS},
         "couriers": {
             "AUSPOST": {"tracking_ready": not client.missing_config(Carrier.AUSPOST),
-                        "quote_ready": not client.missing_config(Carrier.AUSPOST) and bool(settings.auspost_product_id)},
+                        "quote_ready": not client.missing_config(Carrier.AUSPOST) and bool(settings.auspost_product_id),
+                        "account_number_warning": client.account_number_problem(Carrier.AUSPOST)},
             "STARTRACK": {"tracking_ready": not client.missing_config(Carrier.STARTRACK),
-                          "quote_ready": not client.missing_config(Carrier.STARTRACK) and bool(settings.startrack_product_id)},
+                          "quote_ready": not client.missing_config(Carrier.STARTRACK) and bool(settings.startrack_product_id),
+                          "account_number_warning": client.account_number_problem(Carrier.STARTRACK)},
             "TNT": {"tracking_ready": False, "quote_ready": False, "note": "Not implemented (optional bonus)."},
         },
     }

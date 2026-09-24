@@ -36,7 +36,7 @@ uvicorn app.main:app --port 8000
 ```
 - API 文档 / JSON 视图：http://localhost:8000/docs
 - 控制台输出：`python scripts/print_orders.py`（加 `--json` 输出 JSON，或加订单号只看一个订单）
-- 测试：`pytest`（34 个测试）
+- 测试：`pytest`（39 个测试）
 
 ### 前端
 ```bash
@@ -142,7 +142,9 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
   3. 凭证格式正常（key 为标准 36 位 UUID，密码 20 位，`.env` 中没有隐藏空格或换行）。
   4. AusPost 已推出 **Shipping and Tracking API v2**，改用 OAuth 2.0：用 `client_id` / `client_secret` 向 `https://welcome.api1.auspost.com.au/oauth/token` 申请令牌（`grant_type=client_credentials`，`audience=https://digitalapi.auspost.com.au/shipping/v2`），再用 `Authorization: Bearer <token>` 调用 API。旧版文档站的发布说明停在 2018 年。把考题提供的 key / 密码当作 `client_id` / `client_secret` 去申请令牌，返回 `access_denied / Unauthorized`，说明考题提供的是**旧版 v1 凭证**，不是 v2 凭证。
   5. **最可能的原因**：考题中的 v1 测试凭证已过期或被停用（例如随 v1 → v2 迁移失效）。无法从外部进一步区分「key 已停用」和「密码不匹配」，因为两者返回同样的 401。如果凭证是从截图或邮件手工转录的，也可能有易混淆字符（如 `1` / `l` / `I`），需要与原始来源核对。
-  6. **解决办法**：向出题方确认凭证是否仍有效，或索取新的测试凭证（v1 的 API key + 密码，或 v2 的 `client_id` + `client_secret`）。如果拿到 v2 凭证，只需在 `couriers/auspost.py` 中增加「申请令牌 → Bearer 认证」一步，其余代码不变。
+  6. **StarTrack 账号格式不合规**：官方「REST and authentication」页面规定 StarTrack 账号为 8 位且**首位不为 0**，AusPost 账号为 10 位（不足左侧补零）。考题给出的 StarTrack 账号 `04456017` 首位是 0，不符合规则（看起来像是 AusPost 账号 `2004456017` 去掉了前两位）。这不是 401 的原因（认证在校验账号之前），但凭证修复后会导致账号错误（如 `41001 CUSTOMER_NOT_FOUND`），需要一并向出题方确认。`/api/health` 会显示该警告。
+  7. **Track Items 响应格式已更新**（官方文档示例日期 2024-08）：StarTrack 运单的状态和事件在顶层 `consignment` 中，AusPost 运单为 `trackable_items[].items[].events` 嵌套结构，且可能有重复事件。解析器已支持文档中的全部格式并去重，均有单元测试覆盖；还处理了每分钟 10 次的限流（HTTP 429 / `API_002`）。
+  8. **解决办法**：向出题方确认凭证是否仍有效，或索取新的测试凭证（v1 的 API key + 密码，或 v2 的 `client_id` + `client_secret`）。如果拿到 v2 凭证，只需在 `couriers/auspost.py` 中增加「申请令牌 → Bearer 认证」一步，其余代码不变。
 - 因此界面对 AusPost/StarTrack 显示「Unavailable（HTTP 401）」，运费回退到公式估算。凭证更新后无需修改代码：运行 probe 脚本，从 `accounts` 响应中选出产品 ID 填入 `AUSPOST_PRODUCT_ID` / `STARTRACK_PRODUCT_ID`，即可启用实时跟踪和快递报价。
 - 实际错误格式为 `error_code / error_name / message`（部分文档为 `code / name`），客户端两种都兼容。
 
