@@ -49,7 +49,7 @@ const statusClass = (s) => ({ completed: 'ok', 'in transit': 'info' }[(s || '').
       <div class="left">
         <section class="panel">
           <h3>SKU Details</h3>
-          <div class="muted small">{{ detail.shipments.reduce((n, s) => n + s.lines.length, 0) }} line(s) · prices in AUD, SKU price includes GST</div>
+          <div class="muted small">{{ detail.shipments.reduce((n, s) => n + s.lines.length, 0) }} line(s) · prices in AUD · RRP includes GST, unit price and subtotal shown ex GST</div>
           <p v-if="!detail.shipments.length" class="muted">No SKU lines for this order number.</p>
           <div v-for="s in detail.shipments" :key="s.tracking_ref" class="group">
             <div class="group-head small">

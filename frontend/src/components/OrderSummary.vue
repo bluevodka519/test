@@ -6,7 +6,7 @@ defineProps({ totals: Object })
 
 <template>
   <div class="summary">
-    <div class="row"><span>Subtotal</span><span>{{ aud(totals.subtotal) }}</span></div>
+    <div class="row"><span>Subtotal (ex GST)</span><span>{{ aud(totals.subtotal_ex_gst) }}</span></div>
     <div class="row"><span>GST (10% of Subtotal)</span><span>{{ aud(totals.gst) }}</span></div>
     <div class="row"><span>Shipment Fee</span><span>{{ aud(totals.shipment_fee) }}</span></div>
     <div class="row total"><span>Total <small>(Subtotal + GST + Shipment Fee)</small></span><span>{{ aud(totals.total) }}</span></div>

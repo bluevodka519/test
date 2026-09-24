@@ -25,9 +25,10 @@ const statusText = {
       </div>
       <div v-if="line.description && line.description !== line.name" class="desc">{{ line.description }}</div>
       <dl class="nums">
+        <div><dt>RRP (incl. GST)</dt><dd>{{ aud(line.rrp) }}</dd></div>
+        <div><dt>Unit price (ex GST)</dt><dd>{{ aud(line.unit_price_ex_gst) }}</dd></div>
         <div><dt>Quantity</dt><dd>{{ line.quantity }}</dd></div>
-        <div><dt>Price per unit</dt><dd>{{ aud(line.unit_price) }}</dd></div>
-        <div class="total"><dt>Line total</dt><dd>{{ ok ? aud(line.line_total) : '—' }}</dd></div>
+        <div class="total"><dt>Line subtotal (ex GST)</dt><dd>{{ ok ? aud(line.line_subtotal_ex_gst) : '—' }}</dd></div>
       </dl>
       <div v-if="!ok" class="msg">{{ line.message }}</div>
     </div>
@@ -59,7 +60,7 @@ const statusText = {
 }
 .nums {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 6px 0 0;
 }
