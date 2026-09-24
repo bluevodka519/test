@@ -42,6 +42,7 @@ const feePill = computed(() => ({
           </div>
         </li>
       </ol>
+      <p v-if="t.message" class="small muted source">{{ t.message }}</p>
     </template>
 
     <!-- Any non-live state: never invent a result -->
@@ -99,6 +100,7 @@ const feePill = computed(() => ({
 .state p { margin: 2px 0 0; }
 .state.warn { background: var(--amber-soft); color: #5e3a00; }
 .state.bad { background: var(--red-soft); color: #6b2121; }
+.source { margin: 0; }
 .fee { border-top: 1px dashed var(--line); padding-top: 10px; }
 .fee-top { display: flex; align-items: center; gap: 8px; }
 .fee-top strong { margin-left: auto; font-size: 15px; }
