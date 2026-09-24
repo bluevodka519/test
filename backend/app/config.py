@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     tnt_uat_password: str = ""
     tnt_account: str = ""
 
+    tnt_public_tracking: bool = True
+
     courier_timeout_seconds: float = 10.0
     data_dir: Path = DEFAULT_DATA_DIR
 

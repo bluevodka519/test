@@ -66,7 +66,8 @@ async def main() -> None:
     orders = [o for o in ds.orders if not args.order_no or o.order_no == args.order_no]
     if not orders:
         sys.exit(f"Order {args.order_no} not found")
-    auspost, tnt = AusPostClient(settings), TntClient()
+    auspost = AusPostClient(settings)
+    tnt = TntClient(enabled=settings.tnt_public_tracking, timeout=settings.courier_timeout_seconds)
     details = [await build_order(o, ds, auspost, tnt) for o in orders]
 
     if args.json:

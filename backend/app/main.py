@@ -15,7 +15,8 @@ app = FastAPI(title="Order Details, Tracking & Shipping Estimate", version="1.0.
 
 def _context():
     settings = get_settings()
-    return settings, load_dataset(settings.data_dir), AusPostClient(settings), TntClient()
+    tnt = TntClient(enabled=settings.tnt_public_tracking, timeout=settings.courier_timeout_seconds)
+    return settings, load_dataset(settings.data_dir), AusPostClient(settings), tnt
 
 
 @app.get("/api/health")
@@ -33,7 +34,8 @@ def health():
             "STARTRACK": {"tracking_ready": not client.missing_config(Carrier.STARTRACK),
                           "quote_ready": not client.missing_config(Carrier.STARTRACK) and bool(settings.startrack_product_id),
                           "account_number_warning": client.account_number_problem(Carrier.STARTRACK)},
-            "TNT": {"tracking_ready": False, "quote_ready": False, "note": "Not implemented (optional bonus)."},
+            "TNT": {"tracking_ready": settings.tnt_public_tracking, "quote_ready": False,
+                    "note": "Tracking via TNT's public Track & Trace page; the RTT price service is retired (404)."},
         },
     }
 

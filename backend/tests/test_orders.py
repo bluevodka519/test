@@ -20,7 +20,7 @@ def test_parse_quantity(raw, expected):
 
 def _build(tmp_path, settings, lines, shipments, rows, orders=None):
     ds = load_dataset(write_dataset(tmp_path, orders or [order("PO-1")], lines, shipments, rows))
-    detail = asyncio.run(build_order(ds.orders[0], ds, AusPostClient(settings), TntClient()))
+    detail = asyncio.run(build_order(ds.orders[0], ds, AusPostClient(settings), TntClient(enabled=False)))
     return ds, detail
 
 
@@ -57,7 +57,7 @@ def test_lines_grouped_into_shipments_per_tracking_ref(tmp_path, unconfigured):
     assert [s.tracking_ref for s in d.shipments] == ["T2", "T3"]
     assert [len(s.lines) for s in d.shipments] == [2, 1]
     assert d.shipments[0].tracking.status == TrackingStatus.NOT_CONFIGURED
-    assert d.shipments[1].tracking.status == TrackingStatus.NOT_IMPLEMENTED
+    assert d.shipments[1].tracking.status == TrackingStatus.NOT_CONFIGURED  # TNT network access off in tests
     # TNT fee is always 0.00; StarTrack falls back to the formula when not configured.
     assert d.shipments[1].fee.amount == Decimal("0.00")
     assert d.shipments[1].fee.source == FeeSource.NOT_AVAILABLE

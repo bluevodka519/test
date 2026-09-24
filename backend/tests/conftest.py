@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import DEFAULT_DATA_DIR, Settings  # noqa: E402
 from app.couriers.auspost import clear_caches  # noqa: E402
+from app.couriers.tnt import clear_cache as clear_tnt_cache  # noqa: E402
 
 BASE = "https://courier.test/shipping/v1"
 
@@ -15,8 +16,10 @@ BASE = "https://courier.test/shipping/v1"
 @pytest.fixture(autouse=True)
 def _clear_courier_caches():
     clear_caches()
+    clear_tnt_cache()
     yield
     clear_caches()
+    clear_tnt_cache()
 
 
 @pytest.fixture

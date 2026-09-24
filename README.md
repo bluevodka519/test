@@ -36,7 +36,7 @@ uvicorn app.main:app --port 8000
 ```
 - API 文档 / JSON 视图：http://localhost:8000/docs
 - 控制台输出：`python scripts/print_orders.py`（加 `--json` 输出 JSON，或加订单号只看一个订单）
-- 测试：`pytest`（39 个测试）
+- 测试：`pytest`（45 个测试）
 
 ### 前端
 ```bash
@@ -54,6 +54,7 @@ npm run dev
 | 后端 | fastapi, uvicorn | Web API |
 | 后端 | pydantic, pydantic-settings | 数据校验、读取 `.env` |
 | 后端 | httpx | 异步调用快递 API（带超时） |
+| 后端 | tzdata | 澳洲时区数据（Windows 上 zoneinfo 需要） |
 | 测试 | pytest, respx | 单元测试、模拟 HTTP |
 | 前端 | vue, vite, @vitejs/plugin-vue | 界面 |
 
@@ -117,7 +118,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 | `NO_DATA` | API 正常但该单号无数据 / 单号无效 |
 | `UNAVAILABLE` | 超时、HTTP 错误、返回非 JSON 等 |
 | `NOT_CONFIGURED` | `.env` 缺少必要变量（不发出请求） |
-| `NOT_IMPLEMENTED` | TNT（见下文） |
+| `NOT_IMPLEMENTED` | 预留状态（目前未使用） |
 
 ### 实际测试结果（2026-09-24）
 使用 `backend/scripts/probe_auspost.py` 对测试环境 `https://digitalapi.auspost.com.au/test/shipping/v1` 进行了测试：
@@ -148,8 +149,25 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 - 因此界面对 AusPost/StarTrack 显示「Unavailable（HTTP 401）」，运费回退到公式估算。凭证更新后无需修改代码：运行 probe 脚本，从 `accounts` 响应中选出产品 ID 填入 `AUSPOST_PRODUCT_ID` / `STARTRACK_PRODUCT_ID`，即可启用实时跟踪和快递报价。
 - 实际错误格式为 `error_code / error_name / message`（部分文档为 `code / name`），客户端两种都兼容。
 
-### TNT（未实现）
-TNT 使用基于 XML 的 RTT（报价）和 Secured Weblinking（跟踪），接入方式与 AusPost 完全不同。TNT 包裹显示「Not implemented」，运费 **A$0.00**（PDF：「If you cannot finish it, just show $0.00」）。`couriers/tnt.py` 与 AusPost 客户端接口相同，以后可以直接替换。
+### TNT（跟踪已实现，报价不可用）
+
+**调研结果（2026-09-24）**：
+- TNT 澳洲已并入 **FedEx Express Australia**，旧的集成系统已陆续下线。
+- **RTT 报价接口**（`/Rtt/inputRequest.asp`，参考开源项目 ptrcko/TNT-API 的请求格式）在生产环境 `www.tntexpress.com.au` 和 UAT 环境 `uat.tntexpress.com.au` 上，各种大小写和路径变体**全部返回 404**。
+- **旧版 Weblinking 直链**（`track.aspx?con=<运单号>`）会被重定向到一个 404 页面。
+- 考题提供的 Secured Weblinking 和 Domestic UAT 凭证对应的正是上述旧系统。邮件中提到的 RTT 技术规范和 Weblinking 文档附件没有提供，因此这两套凭证无法在任何仍在运行的 API 上使用；网页登录表单也不会用它们去自动登录。
+- 仍在运行的是 TNT 的**公开**国内跟踪页面 `https://www.tntexpress.com.au/interaction/trackntrace.aspx`（无需登录）。在该页面查询 `305506914`，得到的是真实的物流记录：03/12/2025 在 Sydney - Enfield 录入并揽收，04/12/2025 13:00 在墨尔本送达，签收人 Norton。录入日期与订单 2 的日期（03/12/25）一致，收货地也与订单 2 的地址吻合。
+- TNT 网站的使用条款中没有禁止自动访问的条款，也没有 `robots.txt`。
+
+**实现方式**（`couriers/tnt.py`）：
+- 后端模拟一次公开查询：打开表单 → 按运单号提交（ASP.NET 回发，`method=CON`）→ 回发「View Details」→ 解析 Status / Date & Time / Depot 历史表格。
+- 页面显示的是站点当地时间，程序按站点城市换算为带时区的时间（Sydney / Melbourne 用 AEST/AEDT，Perth、Brisbane、Adelaide 等各用本地时区）。
+- 结果缓存 10 分钟；不登录、不发送任何凭证；界面注明数据来源为「TNT public Track & Trace page」。
+- 页面结构一旦变化，或者请求超时、出错，都显示「Unavailable」，不会编造结果；有单元测试覆盖。
+- 可用 `.env` 中的 `TNT_PUBLIC_TRACKING=false` 关闭。
+- **局限**：这不是官方 API，TNT 改版网页后需要同步修改解析逻辑。正式上线时应向 FedEx Express Australia 申请正式的 API 接入（FedEx 也在推进统一的 REST API）。
+
+**运费**：RTT 报价服务已下线，拿不到 TNT 报价，TNT 包裹运费按考题要求显示 **A$0.00**，并注明原因。
 
 ---
 
@@ -212,6 +230,7 @@ PDF 允许「使用快递 API」或「基于重量和体积的合理公式」。
 | 一个订单有多个包裹、不同快递 | 以包裹为单位查询物流和计算运费 |
 | 浮点数误差 | `Decimal` + 金额以字符串传输 |
 | 在线图片大多是品牌 Logo 而非产品图 | 只使用确认是产品照片的图片，其他用占位图 |
+| TNT 已并入 FedEx，RTT 接口和旧版 Weblinking 直链均已下线（404），提供的 TNT 凭证无处可用 | 实际调研并测试了生产环境和 UAT 环境；改为读取 TNT 公开跟踪页面，取得运单 305506914 的真实物流记录（已送达，签收人 Norton）；页面变化时显示「Unavailable」；TNT 运费按要求显示 A$0.00 |
 | 测试环境凭证返回 401 | 所有失败都显示为明确状态，运费回退到公式，并在第 5 节记录测试过程 |
 | 密钥安全（考题文件本身含有凭证） | `.env` + `.gitignore`（考题 PDF 和 HTML 也被排除）；前端无密钥；`/api/health` 只显示是否已配置 |
 | Windows 控制台 GBK 编码无法输出 `mm³` | 所有文件以 UTF-8 读取，控制台脚本强制 UTF-8 输出 |
@@ -230,7 +249,7 @@ backend/
   app/services/orders.py   组装订单：匹配、校验、分包裹、物流、运费、合计
   app/services/shipping.py 组包、快递报价、公式回退
   app/couriers/auspost.py  Australia Post / StarTrack 客户端
-  app/couriers/tnt.py      TNT 占位实现
+  app/couriers/tnt.py      TNT 跟踪（公开查询页面）
   scripts/print_orders.py  控制台 / JSON 输出
   scripts/probe_auspost.py 测试环境连通性检测
   tests/                   pytest

@@ -100,7 +100,8 @@ async def quote_shipment(
                    note="Unknown tracking reference, so the courier is unknown.")
     if carrier == Carrier.TNT:
         return Fee(amount=ZERO, source=FeeSource.NOT_AVAILABLE, parcel=parcel,
-                   note="TNT integration not implemented; fee shown as A$0.00 as the brief requires.")
+                   note="No TNT price quote available (TNT's RTT pricing service is retired); "
+                        "fee shown as A$0.00 as the brief requires.")
 
     origin = rates["origin"]["postcode"]
     quote = await auspost.quote(carrier, origin, dest.postcode, parcel)
