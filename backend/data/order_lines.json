@@ -1,0 +1,11 @@
+[
+  { "sku": "TBAMET10",  "quantity": 3,  "tracking_ref": "Track 1", "order_no": "PO-20251130-00072" },
+  { "sku": "TBAMET28",  "quantity": 1,  "tracking_ref": "Track 1", "order_no": "PO-20251130-00072" },
+  { "sku": "TBOPAL28",  "quantity": 1,  "tracking_ref": "Track 1", "order_no": "PO-20251130-00072" },
+  { "sku": "AURPUR10",  "quantity": 10, "tracking_ref": "Track 2", "order_no": "PO-20251203-00046" },
+  { "sku": "HARNIG",    "quantity": 4,  "tracking_ref": "Track 1", "order_no": "PO-20251130-00072" },
+  { "sku": "LELCBD100", "quantity": 6,  "tracking_ref": "Track 1", "order_no": "PO-20251130-00072" },
+  { "sku": "HALGEO15",  "quantity": 1,  "tracking_ref": "Track 3", "order_no": "PO-20251203-00046" },
+  { "sku": "MCMW10",    "quantity": 2,  "tracking_ref": "Track 3", "order_no": "PO-20251203-00046" },
+  { "sku": "MCBO30",    "quantity": 3,  "tracking_ref": "Track 3", "order_no": "PO-20251203-00046" }
+]

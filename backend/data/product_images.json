@@ -1,0 +1,9 @@
+{
+  "_comment": "Optional SKU -> image URL map. Images were searched online by product name (PDF 6.b.i) and only genuine product photos are used. SKUs without an entry use the generated bottle placeholder (PDF 6.b.ii). Searched 2026-09-24; brand-logo-only results (Tasmanian Botanics, Aura Harbour, Limited Edition Labs, Spyn) were rejected.",
+  "images": {
+    "AURPUR10": "https://cannexa.com.au/cdn/shop/files/C29_AR_MOCKUP_PURPLE-RAINE_SINGLE_BIG.png?v=1717482100&width=400"
+  },
+  "sources": {
+    "AURPUR10": "https://cannexa.com.au/products/aura-purple-raine"
+  }
+}

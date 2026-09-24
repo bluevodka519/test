@@ -1,0 +1,32 @@
+{
+  "_comment": "ASSUMED rates for the fallback formula only (used when no courier quote is available). Amounts are AUD incl. GST. Not a real courier rate card.",
+  "origin": { "postcode": "2111", "suburb": "Ryde", "state": "NSW" },
+  "cubic_factor_kg_per_m3": 250,
+  "round_up_to_kg": 0.5,
+  "minimum_chargeable_kg": 0.5,
+  "carton": {
+    "min_length_cm": 22.0,
+    "min_width_cm": 16.0,
+    "min_height_cm": 7.7,
+    "fill_factor": 1.25,
+    "tare_kg": 0.1
+  },
+  "zones": {
+    "SAME_STATE_METRO":      { "label": "Same state, metro",       "base": "9.50",  "per_kg": "1.20" },
+    "SAME_STATE_REGIONAL":   { "label": "Same state, regional",    "base": "11.50", "per_kg": "1.80" },
+    "INTERSTATE_METRO":      { "label": "Interstate, metro",       "base": "12.50", "per_kg": "2.20" },
+    "INTERSTATE_REGIONAL":   { "label": "Interstate, regional",    "base": "15.50", "per_kg": "3.00" },
+    "REMOTE":                { "label": "Remote (NT)",             "base": "19.00", "per_kg": "4.50" }
+  },
+  "metro_postcodes": {
+    "NSW": [[1000, 2249], [2555, 2574], [2740, 2786]],
+    "ACT": [[2600, 2620], [2900, 2920]],
+    "VIC": [[3000, 3207], [3335, 3341], [3427, 3442], [3750, 3810], [3910, 3944], [3975, 3981]],
+    "QLD": [[4000, 4207], [4300, 4305], [4500, 4519]],
+    "SA":  [[5000, 5199]],
+    "WA":  [[6000, 6199]],
+    "TAS": [[7000, 7099]],
+    "NT":  [[800, 832]]
+  },
+  "remote_states": ["NT"]
+}
