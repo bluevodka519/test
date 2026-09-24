@@ -1,9 +1,22 @@
 {
-  "_comment": "Optional SKU -> image URL map. Images were searched online by product name (PDF 6.b.i) and only genuine product photos are used. SKUs without an entry use the generated bottle placeholder (PDF 6.b.ii). Searched 2026-09-24; brand-logo-only results (Tasmanian Botanics, Aura Harbour, Limited Edition Labs, Spyn) were rejected.",
+  "_comment": "Optional SKU -> image URL map. Images are served by the frontend from frontend/public/products/ (resized to max 480px). Only photos of the exact product are used; SKUs without one fall back to the generated bottle placeholder (PDF 6.b.ii). Brand-logo-only results and photos of other brands/pack sizes were rejected.",
   "images": {
-    "AURPUR10": "https://cannexa.com.au/cdn/shop/files/C29_AR_MOCKUP_PURPLE-RAINE_SINGLE_BIG.png?v=1717482100&width=400"
+    "TBAMET10": "/products/TBAMET10.webp",
+    "TBOPAL28": "/products/TBOPAL28.webp",
+    "HARNIG": "/products/HARNIG.webp",
+    "AURPUR10": "/products/AURPUR10.webp"
   },
   "sources": {
+    "TBAMET10": "Supplied by project owner (Tasmanian Botanics THC 25 Amethyst 10g)",
+    "TBOPAL28": "Supplied by project owner (Tasmanian Botanics THC 23 Opal 28g)",
+    "HARNIG": "Supplied by project owner (Aura Therapeutics Harbour LR Night 2g cartridge)",
     "AURPUR10": "https://cannexa.com.au/products/aura-purple-raine"
+  },
+  "not_found": {
+    "TBAMET28": "Only 10g Amethyst jar photos found; a 28g-specific photo was not available",
+    "LELCBD100": "Only the Limited Edition Labs logo found; the supplied image was a different brand (Bald Mountain Botanicals)",
+    "HALGEO15": "Only Spyn / Hale Farm logos found",
+    "MCMW10": "Only the Maali logo found",
+    "MCBO30": "Only the BOB logo found"
   }
 }

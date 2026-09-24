@@ -44,23 +44,30 @@ def test_index_products_first_file_wins():
     assert products["A"].rrp == Decimal("11")
 
 
-def test_line_total_is_price_times_quantity():
-    assert pricing.line_total(Decimal("175.00"), 3) == Decimal("525.00")
-    assert pricing.line_total(Decimal("12.345"), 1) == Decimal("12.35")  # half-up at the cent
-    assert pricing.money(Decimal("0.055")) == Decimal("0.06")
+def test_rrp_includes_gst_so_price_is_backed_out():
+    assert pricing.money(pricing.unit_price_ex_gst(Decimal("22.00"))) == Decimal("20.00")
+    assert pricing.money(pricing.unit_price_ex_gst(Decimal("199.00"))) == Decimal("180.91")
+    assert pricing.money(pricing.line_subtotal_ex_gst(Decimal("149.00"), 4)) == Decimal("541.82")
+    assert pricing.money(Decimal("0.055")) == Decimal("0.06")  # half-up at the cent
 
 
-def test_order_totals_follow_pdf_formula():
-    # PDF: Subtotal = Σ price × qty; GST = 10% of Subtotal; Total = Subtotal + GST + Fee
-    lines = [pricing.line_total(Decimal("22"), 2), pricing.line_total(Decimal("33"), 1)]
+def test_order_totals_match_brief_example():
+    # Brief mock-up: RRP A$22 x2 + A$33 x1, fee A$10 -> 70.00 / 7.00 / 10.00 / 87.00
+    lines = [pricing.line_subtotal_ex_gst(Decimal("22"), 2), pricing.line_subtotal_ex_gst(Decimal("33"), 1)]
     t = pricing.order_totals(lines, Decimal("10"))
-    assert (t.subtotal, t.gst, t.shipment_fee, t.total) == (
-        Decimal("77.00"), Decimal("7.70"), Decimal("10.00"), Decimal("94.70"))
+    assert (t.subtotal_ex_gst, t.gst, t.shipment_fee, t.total) == (
+        Decimal("70.00"), Decimal("7.00"), Decimal("10.00"), Decimal("87.00"))
 
 
-def test_gst_rounds_half_up():
-    t = pricing.order_totals([Decimal("0.05")], Decimal("0"))
-    assert t.gst == Decimal("0.01")  # 0.005 -> 0.01
+def test_subtotal_plus_gst_equals_rrp_total_for_real_orders():
+    # Order 1 and order 2 line items (RRP incl. GST, quantity) from the supplied data.
+    order1 = [("99.00", 3), ("199.00", 1), ("199.00", 1), ("149.00", 4), ("140.00", 6)]
+    order2 = [("99.00", 10), ("110.00", 1), ("129.00", 2), ("99.00", 3)]
+    for lines, rrp_total, subtotal, gst in ((order1, "2131.00", "1937.27", "193.73"),
+                                             (order2, "1655.00", "1504.55", "150.45")):
+        t = pricing.order_totals([pricing.line_subtotal_ex_gst(Decimal(r), q) for r, q in lines], Decimal("0"))
+        assert (t.subtotal_ex_gst, t.gst) == (Decimal(subtotal), Decimal(gst))
+        assert t.total == Decimal(rrp_total)  # no GST double-counting, no 1-cent drift
 
 
 def test_order_totals_serialise_as_strings():

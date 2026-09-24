@@ -38,17 +38,18 @@ def print_order(d) -> None:
               f"{'  last update ' + t.last_update if t.last_update else ''}")
         if t.message:
             print(f"    {t.message}")
-        print(f"  {'SKU':<16}{'Name':<44}{'Qty':>5}{'Price/unit':>14}{'Line total':>14}  Image")
+        print(f"  {'SKU':<16}{'Name':<40}{'Qty':>5}{'RRP incl GST':>14}{'Unit ex GST':>13}"
+              f"{'Line ex GST':>14}  Image")
         for l in s.lines:
             image = l.image_url or f"placeholder: Product {l.position}"
-            print(f"  {l.sku[:15]:<16}{(l.name or 'Unknown product')[:42]:<44}{str(l.quantity):>5}"
-                  f"{aud(l.unit_price):>14}{aud(l.line_total):>14}  {image[:40]}")
+            print(f"  {l.sku[:15]:<16}{(l.name or 'Unknown product')[:38]:<40}{str(l.quantity):>5}"
+                  f"{aud(l.rrp):>14}{aud(l.unit_price_ex_gst):>13}{aud(l.line_subtotal_ex_gst):>14}  {image[:30]}")
             if l.status.value != "OK":
                 print(f"    ! {l.message}")
         print(f"  Shipment Fee {aud(s.fee.amount)} ({s.fee.source.value}) {s.fee.note}")
     print("-" * 96)
     t = d.totals
-    for label, value in (("Subtotal", t.subtotal), ("GST (10% of Subtotal)", t.gst),
+    for label, value in (("Subtotal (ex GST)", t.subtotal_ex_gst), ("GST (10% of Subtotal)", t.gst),
                          ("Shipment Fee", t.shipment_fee), ("Total", t.total)):
         print(f"{label:>84}{aud(value):>16}")
     for w in d.warnings:

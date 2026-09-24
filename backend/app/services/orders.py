@@ -44,7 +44,9 @@ def evaluate_line(position: int, line, ds: Dataset) -> tuple[LineResult, Optiona
     if product is not None:
         result.name = product.name
         result.description = product.description
-        result.unit_price = product.rrp
+        result.rrp = product.rrp
+        if product.rrp is not None:
+            result.unit_price_ex_gst = pricing.money(pricing.unit_price_ex_gst(product.rrp))
 
     qty = parse_quantity(line.quantity)
     if product is None:
@@ -57,7 +59,7 @@ def evaluate_line(position: int, line, ds: Dataset) -> tuple[LineResult, Optiona
         result.status = LineStatus.BAD_PRODUCT_DATA
         result.message = "Product has no valid RRP. Excluded from totals."
     else:
-        result.line_total = pricing.line_total(product.rrp, qty)
+        result.line_subtotal_ex_gst = pricing.money(pricing.line_subtotal_ex_gst(product.rrp, qty))
         return result, product, qty
     return result, None, None
 
@@ -137,7 +139,8 @@ async def build_order(order: OrderIn, ds: Dataset, auspost: AusPostClient, tnt: 
                 message="No tracking result returned.",
             )
         line_results = [r for r, _, _ in evaluated]
-        line_totals += [r.line_total for r in line_results if r.line_total is not None]
+        # Totals use the exact values; the rounded ones are only for display.
+        line_totals += [pricing.line_subtotal_ex_gst(p.rrp, q) for _, p, q in evaluated if p is not None]
         shipments.append(ShipmentResult(
             tracking_ref=ref,
             tracking_no=s.tracking_no if s else None,

@@ -2,7 +2,7 @@
 
 一个小型全栈演示应用：读取本地订单文件和 SKU 文件，按 SKU 匹配产品信息，计算小计、GST、运费和总价，并按追踪号调用快递 API 显示物流状态。
 
-**需求以原始考题 PDF（`2026-06-IT-Interview-in-person.pdf`）为准**。另有一份较新的 HTML 说明（含 API 凭证和 FAQ），两者有冲突时以 PDF 为准，差异见第 9 节。
+**需求以原始考题 PDF（`2026-06-IT-Interview-in-person.pdf`）为准**，并结合较新的 HTML 说明（含 API 凭证和 FAQ）。GST 的处理按 FAQ 的明确说明（RRP 已含 GST，先倒推不含税价）；其他差异见第 9 节。
 
 - 后端：Python 3.11 + FastAPI + httpx + Pydantic
 - 前端：Vue 3 + Vite（无 UI 组件库）
@@ -70,7 +70,7 @@ npm run dev
 | `order_lines.json` | SKU 行：`sku, quantity, tracking_ref, order_no`（与 PDF 表格一致） |
 | `shipments.json` | 追踪信息：`tracking_ref, tracking_no, carrier (AUSPOST / STARTRACK / TNT), logistics_company` |
 | `product_*.json` | SQL 查询网站返回的**原始 JSON**，原样保存；多个文件自动合并 |
-| `product_images.json` | `SKU → 图片 URL`（在线搜索得到的真实产品图），没有则使用占位图 |
+| `product_images.json` | `SKU → 图片路径`（真实产品照片，存放在 `frontend/public/products/`），并记录来源和未找到的原因；没有图片的 SKU 使用占位图 |
 | `shipping_rates.json` | 运费公式的**假设**费率表（仅在拿不到快递报价时使用） |
 
 ### 获取 SKU 数据（SQL-like 查询网站）
@@ -82,26 +82,32 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 
 ---
 
-## 4. 计算规则（按 PDF 原文）
+## 4. 计算规则（RRP 含 GST，先倒推不含税价）
+
+考题 FAQ 明确：**RRP（Recommended Retail Price，建议零售价）就是 SKU 价格，以澳元计价，并且已包含 GST**。PDF 也写明「SKU price already includes GST」。因此不能直接用 RRP × 数量作为小计再加 GST（那样 GST 会被算两次），必须先倒推出不含税价：
 
 | 项目 | 公式 |
 |---|---|
-| Price per unit | SKU 价格（`RRP`） |
-| Line Total | SKU 价格 × 数量 |
-| Subtotal | 所有 Line Total 之和 |
-| GST | Subtotal × 10% |
-| Total | Subtotal + GST + Shipment Fee |
+| RRP（含 GST） | SKU 价格，来自查询结果的 `RRP` 字段 |
+| 不含税单价 | RRP ÷ 1.10 |
+| 行小计（不含税） | 不含税单价 × 数量 |
+| 订单小计（不含税） | 所有行小计之和 |
+| GST | 订单小计 × 10% |
+| 总价 | 小计 + GST + 运费 |
 
-- 全程使用 Python `Decimal` + `ROUND_HALF_UP`，不使用浮点数；金额以字符串（如 `"199.00"`）传给前端，前端只负责格式化（`A$1,234.50`）。
-- 每个订单独立计算，不同收件人的订单不会合并。
-- **注意**：PDF 同时写明「SKU price already includes GST」，而公式又在含税价格上再加 10% GST，等于 **GST 重复计算**。本项目按要求严格执行 PDF 公式，但在此说明这一点；如果改为从含税价中拆分 GST（`RRP / 1.10`），只需修改 `app/services/pricing.py` 一个文件。
+- 全程使用 Python `Decimal`，不使用浮点数。**计算过程保留完整精度，只在显示时按 `ROUND_HALF_UP` 四舍五入到分**（考题：「AUD, displayed to two decimal places」）。这样「小计 + GST」始终**正好等于** Σ(RRP × 数量)，不会出现 1 分钱的误差。
+- 行上显示的不含税单价和行小计是四舍五入后的值，所以把各行显示值相加，偶尔会与订单小计相差 1 分；订单级的金额以精确值为准。
+- 金额以字符串（如 `"1937.27"`）传给前端，前端只负责格式化（`A$1,937.27`）。每个订单独立计算。
+- 界面同时显示：RRP（含税）、不含税单价、数量、不含税行小计，以及订单的不含税小计、GST、运费和总价。
 
 手工核对（与程序输出一致）：
 
-| 订单 | Subtotal | GST | Shipment Fee | Total |
-|---|---|---|---|---|
-| PO-20251130-00072 | 297 + 199 + 199 + 596 + 840 = **A$2,131.00** | A$213.10 | A$16.90（StarTrack，公式估算） | **A$2,361.00** |
-| PO-20251203-00046 | 990 + 110 + 258 + 297 = **A$1,655.00** | A$165.50 | A$15.80（StarTrack，公式估算）+ A$0.00（TNT） | **A$1,836.30** |
+| 订单 | Σ RRP × 数量（含税） | 小计（不含税） | GST | 运费 | 总价 |
+|---|---|---|---|---|---|
+| PO-20251130-00072 | 297 + 199 + 199 + 596 + 840 = A$2,131.00 | 2131 ÷ 1.1 = **A$1,937.27** | **A$193.73** | A$16.90（StarTrack，公式估算） | **A$2,147.90** |
+| PO-20251203-00046 | 990 + 110 + 258 + 297 = A$1,655.00 | 1655 ÷ 1.1 = **A$1,504.55** | **A$150.45** | A$15.80（StarTrack，公式估算）+ A$0.00（TNT） | **A$1,670.80** |
+
+两个订单的「小计 + GST」分别是 1,937.27 + 193.73 = 2,131.00、1,504.55 + 150.45 = 1,655.00，与含税 RRP 合计完全一致。
 
 ---
 
@@ -122,7 +128,10 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 
 ### 实际测试结果（2026-09-24）
 使用 `backend/scripts/probe_auspost.py` 对测试环境 `https://digitalapi.auspost.com.au/test/shipping/v1` 进行了测试：
-- 两个账号对 `track`（订单单号及 4 个额外测试单号）和 `accounts/{账号}` 均返回 **HTTP 401 `API_001` "The request failed authentication"**。
+- 测试的单号：
+  - 订单单号：`2FWZ50008569`（Track 1）、`2FWZ50008645`（Track 2）；
+  - 考题 FAQ 6 提供的 4 个额外测试单号：`RBXZ50016112`、`2FWZ50020500`、`2FWZ50020498`、`2FWZ50020475`。按 FAQ 说明，它们只用于测试，**不是订单行**，所以没有加进订单数据，只在 probe 脚本中测试（`python scripts/probe_auspost.py`）。
+- 两个账号（AusPost、StarTrack）对以上全部单号的 `track` 请求，以及 `accounts/{账号}` 请求，均返回 **HTTP 401 `API_001` "The request failed authentication"**。
 - 用 curl 直接请求结果相同，并且与**不带任何凭证**的请求结果完全一样，说明问题不在客户端代码，而是测试环境不接受所提供的凭证（可能已过期或停用）。
 - 为排除调用方式的问题，又测试了以下变体，**全部返回同样的 401**：
 
@@ -193,12 +202,22 @@ PDF 允许「使用快递 API」或「基于重量和体积的合理公式」。
 
 ## 7. 产品图片
 
-按 PDF 第 6 条：先**按 SKU 名称在线搜索图片**，找不到再用占位图。
-- 找到并确认为真实产品照片的：**AURPUR10**（Aura Purple Raine，来源 cannexa.com.au）。
-- 其他 SKU 在 cannareviews.health 等网站上只能找到**品牌 Logo**（Tasmanian Botanics、Aura Harbour、Limited Edition Labs、Spyn），不是 SKU 图片，因此未使用；Maali Wind、BOB 30 未找到。
-- 这些 SKU 显示生成的药瓶占位图，标注「Product 1」「Product 2」……
-- 所有图片 URL 均用 curl 验证过可以访问；如果图片以后失效，前端自动回退到占位图。
-- 在 `product_images.json` 中添加 `SKU → URL` 即可补充图片，无需改代码。
+考题 FAQ 8：不要求真实产品图，但每个产品都要预留图片位置，可以用标注「Product 1」「Product 2」……的占位图或中性的药瓶图标，并在 README 中记录这一假设。PDF 第 6 条建议先按 SKU 名称在线搜索图片，找不到再用占位图。本项目两者结合：
+
+| SKU | 图片 | 来源 |
+|---|---|---|
+| TBAMET10 | 真实产品照片（Amethyst 10g） | 项目负责人提供 |
+| TBOPAL28 | 真实产品照片（Opal 28g） | 项目负责人提供 |
+| HARNIG | 真实产品照片（Harbour LR Night 烟弹） | 项目负责人提供 |
+| AURPUR10 | 真实产品照片（Aura Purple Raine） | cannexa.com.au |
+| TBAMET28 | 占位图 | 只找到 10g 装的照片，没有 28g 装 |
+| LELCBD100 | 占位图 | 只找到 Limited Edition Labs 的 Logo；另一张候选图是其他品牌（Bald Mountain Botanicals）的产品，不采用 |
+| HALGEO15 / MCMW10 / MCBO30 | 占位图 | 只找到 Spyn、Maali、BOB 的品牌 Logo |
+
+- **原则**：只使用确认是该 SKU 本身的产品照片；品牌 Logo、其他品牌或其他规格的图片一律不用，以免误导客户。
+- 图片已缩小到最长边 480 像素（每张 6–15 KB），存放在 `frontend/public/products/<SKU>.webp`，由应用自己提供，不依赖外部网站。
+- 占位图是生成的药瓶图标，标注「Product N」（N 为该订单中的行号）。图片加载失败时也会自动回退到占位图。
+- 在 `backend/data/product_images.json` 中添加 `SKU → 图片路径` 即可补充图片，无需改代码；该文件同时记录了每张图片的来源和未找到的原因。
 
 ---
 
@@ -223,13 +242,13 @@ PDF 允许「使用快递 API」或「基于重量和体积的合理公式」。
 | 难点 | 解决方法 |
 |---|---|
 | PDF 中订单 2 的表头订单号为 `PO-20251202-00046`，而 SKU 表中写的是 `PO-20251203-00046` | 已确认正确订单号为 **`PO-20251203-00046`**（SKU 表的 4 行及订单日期 03/12/25 都与之一致），表头的 `1202` 是笔误。程序本身**不会自动合并**订单号不一致的数据：若 SKU 行引用了不存在的订单号，会作为数据警告列出并提示相似订单号（「did you mean …?」），对应订单显示「没有 SKU 行」。这一检查最初正是用来发现这个笔误的，并有单元测试覆盖 |
-| PDF 公式在含税价格上再加 GST | 按 PDF 执行，并在第 4 节说明（新版 HTML 说明改为 `RRP / 1.10`） |
+| PDF 的公式（行小计 = 价格 × 数量，再加 10% GST）与「SKU 价格已含 GST」矛盾，会导致 GST 重复计算 | 按考题 FAQ「RRP 含 GST」的说明，先用 `RRP / 1.10` 倒推不含税价，再计算 GST；以精确值计算、显示时才四舍五入，保证「小计 + GST」等于含税合计（见第 4 节） |
 | 查询网站默认只返回 10 行；HTML 说明中的查询网址与 PDF 不同 | 使用 PDF 的网址，并用 `WHERE SKU IN (...)` 取得全部 9 个 SKU |
 | 查询结果的所有字段都是带单位的字符串（`"76.0mm"`、`"68.0g"`、`"450528.0mm³"`、`"0.02kg"`），且含换行符 | 用正则解析并统一单位；无法解析的值记为空并给出警告，程序不会崩溃 |
 | 毛重小于净重（数据矛盾） | 取两者较大值作为运费重量 |
 | 一个订单有多个包裹、不同快递 | 以包裹为单位查询物流和计算运费 |
 | 浮点数误差 | `Decimal` + 金额以字符串传输 |
-| 在线图片大多是品牌 Logo 而非产品图 | 只使用确认是产品照片的图片，其他用占位图 |
+| 在线图片大多是品牌 Logo 而非产品图，部分候选图是其他品牌的产品 | 只使用确认是该 SKU 的产品照片（4 个），其余用「Product N」占位图，并记录原因（见第 7 节） |
 | TNT 已并入 FedEx，RTT 接口和旧版 Weblinking 直链均已下线（404），提供的 TNT 凭证无处可用 | 实际调研并测试了生产环境和 UAT 环境；改为读取 TNT 公开跟踪页面，取得运单 305506914 的真实物流记录（已送达，签收人 Norton）；页面变化时显示「Unavailable」；TNT 运费按要求显示 A$0.00 |
 | 测试环境凭证返回 401 | 所有失败都显示为明确状态，运费回退到公式，并在第 5 节记录测试过程 |
 | 密钥安全（考题文件本身含有凭证） | `.env` + `.gitignore`（考题 PDF 和 HTML 也被排除）；前端无密钥；`/api/health` 只显示是否已配置 |

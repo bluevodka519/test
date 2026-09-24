@@ -37,10 +37,11 @@ def test_bad_lines_are_shown_but_excluded_from_totals(tmp_path, unconfigured):
 
     statuses = [l.status for l in d.shipments[0].lines]
     assert statuses == [LineStatus.OK, LineStatus.SKU_NOT_FOUND, LineStatus.INVALID_QTY, LineStatus.BAD_PRODUCT_DATA]
-    assert d.shipments[0].lines[0].unit_price == Decimal("110.00")
-    assert d.shipments[0].lines[0].line_total == Decimal("220.00")
-    assert d.totals.subtotal == Decimal("220.00")
-    assert d.totals.gst == Decimal("22.00")
+    ok_line = d.shipments[0].lines[0]
+    assert (ok_line.rrp, ok_line.unit_price_ex_gst, ok_line.line_subtotal_ex_gst) == (
+        Decimal("110.00"), Decimal("100.00"), Decimal("200.00"))
+    assert d.totals.subtotal_ex_gst == Decimal("200.00")
+    assert d.totals.gst == Decimal("20.00")
     assert len(d.warnings) == 3
 
 

@@ -67,8 +67,9 @@ class LineResult(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     quantity: Any
-    unit_price: Optional[Decimal] = None  # the SKU price (RRP)
-    line_total: Optional[Decimal] = None  # unit_price × quantity
+    rrp: Optional[Decimal] = None                  # SKU price incl. GST
+    unit_price_ex_gst: Optional[Decimal] = None    # RRP / 1.10, rounded for display
+    line_subtotal_ex_gst: Optional[Decimal] = None  # ex-GST unit price x quantity, rounded for display
     status: LineStatus
     message: str = ""
     image_url: Optional[str] = None
@@ -136,7 +137,7 @@ class ShipmentResult(BaseModel):
 
 
 class Totals(BaseModel):
-    subtotal: Decimal
+    subtotal_ex_gst: Decimal
     gst: Decimal
     shipment_fee: Decimal
     total: Decimal
