@@ -120,7 +120,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 
 - 追踪属于**包裹**而不是订单，一个订单可以有多个包裹、多个快递。结构为：订单 → 包裹（按 `tracking_ref` 分组）→ SKU 行；每个包裹单独查询物流、单独计算运费，订单运费 = 各包裹运费之和。
 - 使用哪家快递由 `shipments.json` 中的 `carrier` 决定（PDF：「call the correct API based on the logistics company」）。
-- **Australia Post / StarTrack**：`GET {BASE}/track?tracking_ids=...`，HTTP Basic（API Key : 密码）+ `Account-Number` 请求头；AusPost 账号 2004456017，StarTrack 账号 04456017。每次最多 10 个单号，成功结果缓存 5 分钟，超时 10 秒。
+- **Australia Post / StarTrack**：`GET {BASE}/track?tracking_ids=...`，HTTP Basic（API Key : 密码）+ `Account-Number` 请求头；AusPost 账号 `2004xxxxxx`，StarTrack 账号 `04xxxxxx`（账号已部分隐藏，完整值只保存在本地 `.env` 中）。每次最多 10 个单号，成功结果缓存 5 分钟，超时 10 秒。
 - 密钥只在后端使用。客户端从不抛出异常，所有失败都显示为明确状态，**不会编造物流结果**：
 
 | 状态 | 含义 |
@@ -142,7 +142,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 
   | # | 变体 | 结果 |
   |---|---|---|
-  | 1–3 | Account-Number 分别使用 AusPost 2004456017 / StarTrack 04456017 / Same Day 3004456017 | 401 |
+  | 1–3 | Account-Number 分别使用 AusPost `2004xxxxxx` / StarTrack `04xxxxxx` / Same Day `3004xxxxxx` | 401 |
   | 4 | 不带 Account-Number | 401 |
   | 5 | 使用 `AUTH-KEY` 请求头代替 Basic 认证 | 401 |
   | 6 | 其他接口（`GET accounts/{账号}`） | 401 |
@@ -157,7 +157,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
   3. 凭证格式正常（key 为标准 36 位 UUID，密码 20 位，`.env` 中没有隐藏空格或换行）。
   4. AusPost 已推出 **Shipping and Tracking API v2**，改用 OAuth 2.0：用 `client_id` / `client_secret` 向 `https://welcome.api1.auspost.com.au/oauth/token` 申请令牌（`grant_type=client_credentials`，`audience=https://digitalapi.auspost.com.au/shipping/v2`），再用 `Authorization: Bearer <token>` 调用 API。旧版文档站的发布说明停在 2018 年。把考题提供的 key / 密码当作 `client_id` / `client_secret` 去申请令牌，返回 `access_denied / Unauthorized`，说明考题提供的是**旧版 v1 凭证**，不是 v2 凭证。
   5. **最可能的原因**：考题中的 v1 测试凭证已过期或被停用（例如随 v1 → v2 迁移失效）。无法从外部进一步区分「key 已停用」和「密码不匹配」，因为两者返回同样的 401。如果凭证是从截图或邮件手工转录的，也可能有易混淆字符（如 `1` / `l` / `I`），需要与原始来源核对。
-  6. **StarTrack 账号格式不合规**：官方「REST and authentication」页面规定 StarTrack 账号为 8 位且**首位不为 0**，AusPost 账号为 10 位（不足左侧补零）。考题给出的 StarTrack 账号 `04456017` 首位是 0，不符合规则（看起来像是 AusPost 账号 `2004456017` 去掉了前两位）。这不是 401 的原因（认证在校验账号之前），但凭证修复后会导致账号错误（如 `41001 CUSTOMER_NOT_FOUND`），需要一并向出题方确认。`/api/health` 会显示该警告。
+  6. **StarTrack 账号格式不合规**：官方「REST and authentication」页面规定 StarTrack 账号为 8 位且**首位不为 0**，AusPost 账号为 10 位（不足左侧补零）。考题给出的 StarTrack 账号 `04xxxxxx` 首位是 0，不符合规则（它与 AusPost 账号 `2004xxxxxx` 去掉前两位后的数字完全相同，很可能是抄错了）。这不是 401 的原因（认证在校验账号之前），但凭证修复后会导致账号错误（如 `41001 CUSTOMER_NOT_FOUND`），需要一并向出题方确认。`/api/health` 会显示该警告。
   7. **Track Items 响应格式已更新**（官方文档示例日期 2024-08）：StarTrack 运单的状态和事件在顶层 `consignment` 中，AusPost 运单为 `trackable_items[].items[].events` 嵌套结构，且可能有重复事件。解析器已支持文档中的全部格式并去重，均有单元测试覆盖；还处理了每分钟 10 次的限流（HTTP 429 / `API_002`）。
   8. **解决办法**：向出题方确认凭证是否仍有效，或索取新的测试凭证（v1 的 API key + 密码，或 v2 的 `client_id` + `client_secret`）。如果拿到 v2 凭证，只需在 `couriers/auspost.py` 中增加「申请令牌 → Bearer 认证」一步，其余代码不变。
 - 因此界面对 AusPost/StarTrack 显示「Unavailable（HTTP 401）」，运费回退到公式估算。凭证更新后无需修改代码：运行 probe 脚本，从 `accounts` 响应中选出产品 ID 填入 `AUSPOST_PRODUCT_ID` / `STARTRACK_PRODUCT_ID`，即可启用实时跟踪和快递报价。

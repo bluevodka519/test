@@ -89,13 +89,15 @@ def test_tracking_rate_limited_is_unavailable(configured):
 
 
 def test_account_number_rules(configured):
-    client = AusPostClient(configured.model_copy(update={"auspost_account": "2004456017",
-                                                         "startrack_account": "04456017"}))
+    # Made-up numbers with the same shape as the supplied ones (10-digit AusPost,
+    # 8-digit StarTrack starting with 0).
+    client = AusPostClient(configured.model_copy(update={"auspost_account": "2001234567",
+                                                         "startrack_account": "01234567"}))
     assert client.account_number_problem(Carrier.AUSPOST) is None
     assert "never start with 0" in client.account_number_problem(Carrier.STARTRACK)
     padded = AusPostClient(configured.model_copy(update={"auspost_account": "123456"}))
     assert padded.account_for(Carrier.AUSPOST) == "0000123456"
-    ok = AusPostClient(configured.model_copy(update={"startrack_account": "10004456"}))
+    ok = AusPostClient(configured.model_copy(update={"startrack_account": "12345678"}))
     assert ok.account_number_problem(Carrier.STARTRACK) is None
 
 
