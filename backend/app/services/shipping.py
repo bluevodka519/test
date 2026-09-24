@@ -119,5 +119,5 @@ async def quote_shipment(
                    chargeable_kg=chargeable_kg(parcel, rates), note=quote.note)
 
     fee = formula_fee(parcel, dest, rates)
-    fee.note = f"Courier quote unavailable ({quote.note}) Using formula. {fee.note}"
+    fee.note = f"No carrier price quote ({quote.note.rstrip('.')}). Estimated: {fee.note}"
     return fee

@@ -127,7 +127,7 @@ class AusPostClient:
             return unavailable(f"Tracking API request failed: {type(e).__name__}.")
 
         if resp.status_code != 200:
-            return unavailable(f"Tracking API returned HTTP {resp.status_code}{_error_hint(resp)}.")
+            return unavailable(describe_http_failure("Tracking", resp))
         try:
             payload = resp.json()
         except ValueError:
@@ -145,11 +145,13 @@ class AusPostClient:
 
     async def quote(self, carrier: Carrier, from_postcode: str, to_postcode: str, parcel: Parcel) -> QuoteResult:
         missing = self.missing_config(carrier)
+        if missing:
+            return QuoteResult(None, f"price API not configured, missing {', '.join(missing)}")
         product_id = self.product_id_for(carrier)
         if not product_id:
-            missing.append("STARTRACK_PRODUCT_ID" if carrier == Carrier.STARTRACK else "AUSPOST_PRODUCT_ID")
-        if missing:
-            return QuoteResult(None, f"Courier price API not configured (missing {', '.join(missing)}).")
+            var = "STARTRACK_PRODUCT_ID" if carrier == Carrier.STARTRACK else "AUSPOST_PRODUCT_ID"
+            return QuoteResult(None, f"no {var} set; the product ID comes from GET /accounts "
+                                     "(scripts/probe_auspost.py) once the API credentials are accepted")
 
         body = {
             "from": {"postcode": from_postcode},
@@ -177,7 +179,7 @@ class AusPostClient:
             return QuoteResult(None, f"Courier price API request failed: {type(e).__name__}.")
 
         if resp.status_code != 200:
-            return QuoteResult(None, f"Courier price API returned HTTP {resp.status_code}{_error_hint(resp)}.")
+            return QuoteResult(None, describe_http_failure("Price", resp))
         try:
             amount = parse_price_response(resp.json(), product_id)
         except ValueError:
@@ -197,6 +199,26 @@ def _describe_error(e: dict) -> str:
     code = e.get("error_code") or e.get("code") or ""
     text = e.get("message") or e.get("error_name") or e.get("name") or ""
     return f"{code} {text}".strip()
+
+
+def describe_http_failure(api: str, resp: httpx.Response) -> str:
+    """Turn an HTTP failure into a specific, actionable reason (internal / debug use)."""
+    code, hint = resp.status_code, _error_hint(resp)
+    if code == 401:
+        reason = "rejected the API key and password (authentication failed)"
+    elif code == 403:
+        reason = "refused access for this account number"
+    elif code == 429:
+        reason = "rate limit reached (10 requests per minute); try again shortly"
+    elif code == 400:
+        reason = "rejected the request as invalid"
+    elif code == 404:
+        reason = "endpoint not found (check AUSPOST_BASE_URL)"
+    elif code >= 500:
+        reason = "service error on the carrier side"
+    else:
+        reason = "unexpected response"
+    return f"{api} API {reason}: HTTP {code}{hint}."
 
 
 def _error_hint(resp: httpx.Response) -> str:
