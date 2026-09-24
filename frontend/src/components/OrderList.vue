@@ -1,4 +1,5 @@
 <script setup>
+import { DEBUG } from '../debug'
 import { aud, auDate } from '../format'
 
 defineProps({ orders: Array, selected: String })
@@ -14,7 +15,7 @@ defineEmits(['select'])
     >
       <span class="row">
         <span class="no mono">{{ o.order_no }}</span>
-        <span v-if="o.is_test" class="tag">TEST</span>
+        <span v-if="DEBUG && o.is_test" class="tag">TEST</span>
       </span>
       <span class="row sub">
         <span>{{ o.customer }} · {{ auDate(o.order_date) }}</span>
@@ -23,7 +24,7 @@ defineEmits(['select'])
         <span>{{ o.status }}</span>
         <strong>{{ aud(o.total) }}</strong>
       </span>
-      <span v-if="o.warning_count" class="warn">⚠ {{ o.warning_count }} warning{{ o.warning_count > 1 ? 's' : '' }}</span>
+      <span v-if="DEBUG && o.warning_count" class="warn">⚠ {{ o.warning_count }} warning{{ o.warning_count > 1 ? 's' : '' }}</span>
     </button>
   </nav>
 </template>

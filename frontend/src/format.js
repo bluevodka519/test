@@ -24,6 +24,7 @@ export function auDateTime(iso) {
   })
 }
 
+// Technical status names, shown in the ?debug view only.
 export const TRACKING_LABELS = {
   OK: 'Live',
   NO_DATA: 'No data',
@@ -33,11 +34,40 @@ export const TRACKING_LABELS = {
   NOT_REQUESTED: 'Not requested',
 }
 
+// What a customer sees for each tracking state. Internal reasons (HTTP codes,
+// missing configuration, retired services) are deliberately not exposed.
+export const CUSTOMER_TRACKING = {
+  NO_DATA: {
+    pill: 'Awaiting update',
+    text: 'No tracking updates yet. Updates appear once the carrier scans the parcel.',
+  },
+  UNAVAILABLE: {
+    pill: 'Tracking unavailable',
+    text: 'Tracking details are temporarily unavailable. Please check again later, or use the tracking number on the carrier\'s website.',
+  },
+  NOT_CONFIGURED: {
+    pill: 'Tracking unavailable',
+    text: 'Tracking details are temporarily unavailable. Please check again later, or use the tracking number on the carrier\'s website.',
+  },
+  NOT_IMPLEMENTED: {
+    pill: 'Tracking unavailable',
+    text: 'Online tracking is not available for this carrier. Please use the tracking number on the carrier\'s website.',
+  },
+  NOT_REQUESTED: { pill: 'Loading', text: 'Loading tracking details…' },
+}
+
 export const FEE_LABELS = {
-  COURIER_QUOTE: 'Courier quote',
-  FORMULA_ESTIMATE: 'Estimate (formula)',
+  COURIER_QUOTE: 'Carrier rate',
+  FORMULA_ESTIMATE: 'Estimated',
   NOT_AVAILABLE: 'Not available',
   NO_ITEMS: 'No items',
+}
+
+// Customer wording for line problems (the ?debug view shows the raw message).
+export const CUSTOMER_LINE_STATUS = {
+  SKU_NOT_FOUND: { pill: 'Unavailable', text: 'Product details are unavailable for this item. It is not included in the total.' },
+  INVALID_QTY: { pill: 'Check quantity', text: 'The quantity for this item needs to be confirmed. It is not included in the total.' },
+  BAD_PRODUCT_DATA: { pill: 'Price pending', text: 'The price for this item is being confirmed. It is not included in the total.' },
 }
 
 export const CARRIER_LABELS = {

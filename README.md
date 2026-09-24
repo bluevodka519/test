@@ -46,6 +46,11 @@ npm run dev
 ```
 打开 http://localhost:5173 。Vite 将 `/api` 代理到 8000 端口，无需配置 CORS，浏览器端不接触任何快递密钥。
 
+### 客户视图与调试视图
+- **客户视图**（默认，`http://localhost:5173`）：只显示客户需要的信息。快递接口失败时显示通俗说明（例如「Tracking details are temporarily unavailable…」）；运费只显示金额和「Estimated」标签，汇总处注明运费为估算值；包裹显示为「Parcel 1 / Parcel 2」。不显示 HTTP 错误码、配置项、运费公式、包裹计算过程、数据来源说明和数据文件检查结果。
+- **调试视图**（`http://localhost:5173/?debug`）：在每个包裹卡片下方显示技术细节，包括跟踪状态码和具体原因（例如「Tracking API rejected the API key and password (authentication failed): HTTP 401」）、运费计算公式、包裹重量和尺寸；同时显示数据文件检查结果和订单警告，便于开发和演示。
+- API（`/api/orders/{no}`、`/docs`）和控制台输出始终返回完整的技术信息。
+
 ---
 
 ## 2. 依赖

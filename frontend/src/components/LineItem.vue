@@ -1,15 +1,12 @@
 <script setup>
 import { computed } from 'vue'
-import { aud } from '../format'
+import { DEBUG } from '../debug'
+import { aud, CUSTOMER_LINE_STATUS } from '../format'
 import ProductImage from './ProductImage.vue'
 
 const props = defineProps({ line: Object })
 const ok = computed(() => props.line.status === 'OK')
-const statusText = {
-  SKU_NOT_FOUND: 'SKU not found',
-  INVALID_QTY: 'Invalid quantity',
-  BAD_PRODUCT_DATA: 'Bad product data',
-}
+const problem = computed(() => CUSTOMER_LINE_STATUS[props.line.status])
 </script>
 
 <template>
@@ -18,10 +15,10 @@ const statusText = {
     <div class="body">
       <div class="top">
         <div class="names">
-          <div class="name">{{ line.name || 'Unknown product' }}</div>
+          <div class="name">{{ line.name || 'Product details unavailable' }}</div>
           <div class="sku">SKU <span class="mono">{{ line.sku }}</span></div>
         </div>
-        <span v-if="!ok" class="pill bad">{{ statusText[line.status] }}</span>
+        <span v-if="!ok && problem" class="pill warn">{{ DEBUG ? line.status : problem.pill }}</span>
       </div>
       <div v-if="line.description && line.description !== line.name" class="desc">{{ line.description }}</div>
       <dl class="nums">
@@ -30,7 +27,7 @@ const statusText = {
         <div><dt>Quantity</dt><dd>{{ line.quantity }}</dd></div>
         <div class="total"><dt>Line subtotal (ex GST)</dt><dd>{{ ok ? aud(line.line_subtotal_ex_gst) : '—' }}</dd></div>
       </dl>
-      <div v-if="!ok" class="msg">{{ line.message }}</div>
+      <div v-if="!ok" class="msg">{{ DEBUG ? line.message : problem?.text }}</div>
     </div>
   </div>
 </template>
@@ -43,7 +40,7 @@ const statusText = {
   border-bottom: 1px solid var(--line);
 }
 .line:last-child { border-bottom: 0; }
-.line.excluded .name { text-decoration: line-through; text-decoration-color: #c9a0a0; }
+.line.excluded .name { color: var(--muted); }
 .body { flex: 1; min-width: 0; }
 .top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .names { min-width: 0; }
@@ -68,5 +65,5 @@ const statusText = {
 .nums dd { margin: 0; font-variant-numeric: tabular-nums; }
 .nums .total { text-align: right; }
 .nums .total dd { font-weight: 700; }
-.msg { margin-top: 4px; font-size: 13px; color: var(--red); }
+.msg { margin-top: 4px; font-size: 13px; color: var(--amber); }
 </style>

@@ -1,6 +1,7 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { fetchOrder } from '../api'
+import { DEBUG } from '../debug'
 import { auDate, CARRIER_LABELS } from '../format'
 import LineItem from './LineItem.vue'
 import OrderSummary from './OrderSummary.vue'
@@ -14,9 +15,14 @@ onMounted(async () => {
   try {
     detail.value = await fetchOrder(props.orderNo)
   } catch (e) {
-    error.value = `Could not load order ${props.orderNo} (${e.message}).`
+    error.value = DEBUG
+      ? `Could not load order ${props.orderNo} (${e.message}).`
+      : `We couldn't load order ${props.orderNo} right now. Please try again shortly.`
   }
 })
+
+const lineCount = computed(() => detail.value.shipments.reduce((n, s) => n + s.lines.length, 0))
+const feeIsEstimate = computed(() => detail.value.shipments.some((s) => s.fee.source === 'FORMULA_ESTIMATE'))
 
 const statusClass = (s) => ({ completed: 'ok', 'in transit': 'info' }[(s || '').toLowerCase()] || 'warn')
 </script>
@@ -34,31 +40,36 @@ const statusClass = (s) => ({ completed: 'ok', 'in transit': 'info' }[(s || '').
         </div>
       </div>
       <div class="pills">
-        <span v-if="detail.order.is_test" class="pill warn">TEST DATA</span>
+        <span v-if="DEBUG && detail.order.is_test" class="pill warn">TEST DATA</span>
         <span class="pill" :class="statusClass(detail.order.status)">{{ detail.order.status }}</span>
       </div>
     </header>
 
-    <div v-if="detail.order.test_note" class="banner warn small">{{ detail.order.test_note }}</div>
-    <div v-if="detail.warnings.length" class="banner warn">
-      <strong>{{ detail.warnings.length }} issue{{ detail.warnings.length > 1 ? 's' : '' }} found — affected lines are excluded from totals</strong>
-      <ul><li v-for="w in detail.warnings" :key="w">{{ w }}</li></ul>
-    </div>
+    <!-- Internal data checks: ?debug only. Customers see per-item notes instead. -->
+    <template v-if="DEBUG">
+      <div v-if="detail.order.test_note" class="banner warn small">{{ detail.order.test_note }}</div>
+      <div v-if="detail.warnings.length" class="banner warn">
+        <strong>{{ detail.warnings.length }} data issue{{ detail.warnings.length > 1 ? 's' : '' }} — affected lines are excluded from totals</strong>
+        <ul><li v-for="w in detail.warnings" :key="w">{{ w }}</li></ul>
+      </div>
+    </template>
 
     <div class="grid">
       <div class="left">
         <section class="panel">
-          <h3>SKU Details</h3>
-          <div class="muted small">{{ detail.shipments.reduce((n, s) => n + s.lines.length, 0) }} line(s) · prices in AUD · RRP includes GST, unit price and subtotal shown ex GST</div>
-          <p v-if="!detail.shipments.length" class="muted">No SKU lines for this order number.</p>
-          <div v-for="s in detail.shipments" :key="s.tracking_ref" class="group">
+          <h3>Order Items</h3>
+          <div class="muted small">
+            {{ lineCount }} item{{ lineCount === 1 ? '' : 's' }} · Prices in AUD. RRP includes GST; unit price and subtotal exclude GST.
+          </div>
+          <p v-if="!detail.shipments.length" class="muted">There are no items on this order yet.</p>
+          <div v-for="(s, i) in detail.shipments" :key="s.tracking_ref" class="group">
             <div class="group-head small">
-              {{ s.tracking_ref }} · {{ CARRIER_LABELS[s.carrier] || 'Unknown courier' }}
+              {{ DEBUG ? s.tracking_ref : `Parcel ${i + 1}` }} · {{ CARRIER_LABELS[s.carrier] || 'Courier' }}
               <span class="mono">{{ s.tracking_no }}</span>
             </div>
             <LineItem v-for="l in s.lines" :key="l.position" :line="l" />
           </div>
-          <OrderSummary :totals="detail.totals" />
+          <OrderSummary :totals="detail.totals" :fee-is-estimate="feeIsEstimate" />
         </section>
 
         <section class="panel">
@@ -78,7 +89,7 @@ const statusClass = (s) => ({ completed: 'ok', 'in transit': 'info' }[(s || '').
 
       <div class="right">
         <h3 class="section-title">Logistics Tracking</h3>
-        <TrackingPanel v-for="s in detail.shipments" :key="s.tracking_ref" :shipment="s" />
+        <TrackingPanel v-for="(s, i) in detail.shipments" :key="s.tracking_ref" :shipment="s" :index="i + 1" />
       </div>
     </div>
   </div>

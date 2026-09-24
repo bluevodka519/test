@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { fetchOrders } from './api'
+import { DEBUG } from './debug'
 import OrderList from './components/OrderList.vue'
 import OrderDetail from './components/OrderDetail.vue'
 
@@ -9,6 +10,7 @@ const dataWarnings = ref([])
 const selected = ref(null)
 const error = ref('')
 const loading = ref(true)
+const refreshCount = ref(0) // part of the detail's key, so Refresh also reloads tracking
 
 async function load() {
   loading.value = true
@@ -18,8 +20,11 @@ async function load() {
     orders.value = data.orders
     dataWarnings.value = data.data_warnings
     if (!selected.value && orders.value.length) selected.value = orders.value[0].order_no
+    refreshCount.value++
   } catch (e) {
-    error.value = `Could not load orders (${e.message}). Is the backend running on port 8000?`
+    error.value = DEBUG
+      ? `Could not load orders (${e.message}). Is the backend running on port 8000?`
+      : "We couldn't load your orders right now. Please try again shortly."
   } finally {
     loading.value = false
   }
@@ -36,17 +41,18 @@ onMounted(load)
         <button class="refresh" @click="load" :disabled="loading">Refresh</button>
       </div>
       <OrderList :orders="orders" :selected="selected" @select="selected = $event" />
-      <div v-if="dataWarnings.length" class="banner warn small">
+      <div v-if="DEBUG && dataWarnings.length" class="banner warn small">
         <strong>Data file warnings</strong>
         <ul><li v-for="w in dataWarnings" :key="w">{{ w }}</li></ul>
       </div>
+      <div v-if="DEBUG" class="debug-flag small">Debug view · technical details shown</div>
     </aside>
 
     <main class="content">
       <div v-if="error" class="banner bad">{{ error }}</div>
       <p v-else-if="loading && !orders.length" class="muted">Loading orders…</p>
-      <OrderDetail v-else-if="selected" :key="selected" :order-no="selected" />
-      <p v-else class="muted">No orders in the data files.</p>
+      <OrderDetail v-else-if="selected" :key="`${selected}-${refreshCount}`" :order-no="selected" />
+      <p v-else class="muted">No orders to show.</p>
     </main>
   </div>
 </template>
@@ -78,6 +84,12 @@ onMounted(load)
 }
 .refresh:disabled { opacity: .5; cursor: default; }
 .content { padding: 24px; min-width: 0; }
+.debug-flag {
+  padding: 6px 10px;
+  border: 1px dashed rgba(255,255,255,.4);
+  border-radius: 6px;
+  color: #f3c46b;
+}
 
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; }
