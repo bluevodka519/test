@@ -18,6 +18,21 @@
     "INTERSTATE_REGIONAL":   { "label": "Interstate, regional",    "base": "15.50", "per_kg": "3.00" },
     "REMOTE":                { "label": "Remote (NT)",             "base": "19.00", "per_kg": "4.50" }
   },
+  "carriers": {
+    "TNT": {
+      "_comment": "ASSUMED TNT Road Express rates (TNT's RTT price service is retired, so no quote API is available). Overrides the default zones / cubic factor for TNT parcels only.",
+      "label": "TNT Road Express (assumed rates)",
+      "cubic_factor_kg_per_m3": 250,
+      "minimum_chargeable_kg": 1.0,
+      "zones": {
+        "SAME_STATE_METRO":    { "label": "Same state, metro",    "base": "10.50", "per_kg": "1.30" },
+        "SAME_STATE_REGIONAL": { "label": "Same state, regional", "base": "13.00", "per_kg": "2.00" },
+        "INTERSTATE_METRO":    { "label": "Interstate, metro",    "base": "13.50", "per_kg": "2.40" },
+        "INTERSTATE_REGIONAL": { "label": "Interstate, regional", "base": "17.00", "per_kg": "3.30" },
+        "REMOTE":              { "label": "Remote (NT)",          "base": "21.00", "per_kg": "5.00" }
+      }
+    }
+  },
   "metro_postcodes": {
     "NSW": [[1000, 2249], [2555, 2574], [2740, 2786]],
     "ACT": [[2600, 2620], [2900, 2920]],

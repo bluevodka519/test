@@ -35,7 +35,8 @@ def health():
                           "quote_ready": not client.missing_config(Carrier.STARTRACK) and bool(settings.startrack_product_id),
                           "account_number_warning": client.account_number_problem(Carrier.STARTRACK)},
             "TNT": {"tracking_ready": settings.tnt_public_tracking, "quote_ready": False,
-                    "note": "Tracking via TNT's public Track & Trace page; the RTT price service is retired (404)."},
+                    "note": "Tracking via TNT's public Track & Trace page; the RTT price service is retired (404), "
+                            "so TNT fees are formula estimates with assumed TNT rates."},
         },
     }
 

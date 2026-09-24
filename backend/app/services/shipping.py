@@ -18,6 +18,12 @@ from app.services.products import Product
 TENTH = Decimal("0.1")
 
 
+def rates_for(rates: dict, carrier: Optional[Carrier]) -> dict:
+    """Default rates, overridden by a carrier-specific block (e.g. TNT) when present."""
+    override = rates.get("carriers", {}).get(carrier.value if carrier else "", {})
+    return {**rates, **{k: v for k, v in override.items() if not k.startswith("_")}}
+
+
 def build_parcel(items: list[tuple[Product, int]], rates: dict) -> tuple[Optional[Parcel], list[str]]:
     notes: list[str] = []
     if not items:
@@ -83,10 +89,11 @@ def formula_fee(parcel: Parcel, dest: Address, rates: dict) -> Fee:
     zone_rates = rates["zones"][zone]
     kg = chargeable_kg(parcel, rates)
     amount = money(Decimal(zone_rates["base"]) + Decimal(zone_rates["per_kg"]) * kg)
+    rate_card = rates.get("label", "assumed rates")
     return Fee(
         amount=amount, source=FeeSource.FORMULA_ESTIMATE, zone=zone_rates["label"],
         chargeable_kg=kg, parcel=parcel,
-        note=f"{zone_rates['label']}: A${zone_rates['base']} + A${zone_rates['per_kg']}/kg × {kg} kg (assumed rates).",
+        note=f"{zone_rates['label']}: A${zone_rates['base']} + A${zone_rates['per_kg']}/kg × {kg} kg ({rate_card}).",
     )
 
 
@@ -98,10 +105,12 @@ async def quote_shipment(
     if carrier is None:
         return Fee(amount=ZERO, source=FeeSource.NOT_AVAILABLE, parcel=parcel,
                    note="Unknown tracking reference, so the courier is unknown.")
+    rates = rates_for(rates, carrier)
     if carrier == Carrier.TNT:
-        return Fee(amount=ZERO, source=FeeSource.NOT_AVAILABLE, parcel=parcel,
-                   note="No TNT price quote available (TNT's RTT pricing service is retired); "
-                        "fee shown as A$0.00 as the brief requires.")
+        # No TNT quote API exists any more, so estimate from the packed parcel.
+        fee = formula_fee(parcel, dest, rates)
+        fee.note = f"No TNT price quote available (TNT's RTT pricing service is retired). Estimated: {fee.note}"
+        return fee
 
     origin = rates["origin"]["postcode"]
     quote = await auspost.quote(carrier, origin, dest.postcode, parcel)

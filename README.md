@@ -36,7 +36,7 @@ uvicorn app.main:app --port 8000
 ```
 - API 文档 / JSON 视图：http://localhost:8000/docs
 - 控制台输出：`python scripts/print_orders.py`（加 `--json` 输出 JSON，或加订单号只看一个订单）
-- 测试：`pytest`（45 个测试）
+- 测试：`pytest`（46 个测试）
 
 ### 前端
 ```bash
@@ -105,7 +105,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 | 订单 | Σ RRP × 数量（含税） | 小计（不含税） | GST | 运费 | 总价 |
 |---|---|---|---|---|---|
 | PO-20251130-00072 | 297 + 199 + 199 + 596 + 840 = A$2,131.00 | 2131 ÷ 1.1 = **A$1,937.27** | **A$193.73** | A$16.90（StarTrack，公式估算） | **A$2,147.90** |
-| PO-20251203-00046 | 990 + 110 + 258 + 297 = A$1,655.00 | 1655 ÷ 1.1 = **A$1,504.55** | **A$150.45** | A$15.80（StarTrack，公式估算）+ A$0.00（TNT） | **A$1,670.80** |
+| PO-20251203-00046 | 990 + 110 + 258 + 297 = A$1,655.00 | 1655 ÷ 1.1 = **A$1,504.55** | **A$150.45** | A$15.80（StarTrack，公式估算）+ A$15.90（TNT，公式估算）= A$31.70 | **A$1,686.70** |
 
 两个订单的「小计 + GST」分别是 1,937.27 + 193.73 = 2,131.00、1,504.55 + 150.45 = 1,655.00，与含税 RRP 合计完全一致。
 
@@ -158,7 +158,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 - 因此界面对 AusPost/StarTrack 显示「Unavailable（HTTP 401）」，运费回退到公式估算。凭证更新后无需修改代码：运行 probe 脚本，从 `accounts` 响应中选出产品 ID 填入 `AUSPOST_PRODUCT_ID` / `STARTRACK_PRODUCT_ID`，即可启用实时跟踪和快递报价。
 - 实际错误格式为 `error_code / error_name / message`（部分文档为 `code / name`），客户端两种都兼容。
 
-### TNT（跟踪已实现，报价不可用）
+### TNT（跟踪已实现，运费按公式估算）
 
 **调研结果（2026-09-24）**：
 - TNT 澳洲已并入 **FedEx Express Australia**，旧的集成系统已陆续下线。
@@ -176,7 +176,7 @@ SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPU
 - 可用 `.env` 中的 `TNT_PUBLIC_TRACKING=false` 关闭。
 - **局限**：这不是官方 API，TNT 改版网页后需要同步修改解析逻辑。正式上线时应向 FedEx Express Australia 申请正式的 API 接入（FedEx 也在推进统一的 REST API）。
 
-**运费**：RTT 报价服务已下线，拿不到 TNT 报价，TNT 包裹运费按考题要求显示 **A$0.00**，并注明原因。
+**运费**：RTT 报价服务已下线，拿不到 TNT 官方报价，因此按包装（重量和体积）用 TNT 假设费率估算，详见第 6 节。
 
 ---
 
@@ -194,7 +194,13 @@ PDF 允许「使用快递 API」或「基于重量和体积的合理公式」。
    - 运费 = 区域基础价 + 每公斤单价 × 计费重
    - 区域按收件州和邮编判断：同州市区 / 同州偏远 / 跨州市区 / 跨州偏远 / NT 偏远
    - **费率均为假设值**（`shipping_rates.json`），不是真实价目表，修改文件即可调整
-4. **TNT → A$0.00**。
+4. **TNT → 按包装用公式估算**：TNT 的 RTT 报价服务已下线，没有报价接口可用，所以按同样的组包结果（重量、纸箱尺寸、体积重）估算运费，使用单独的 **TNT Road Express 假设费率**（`shipping_rates.json` 的 `carriers.TNT`）：
+   - 体积换算系数 250 kg/m³（TNT 国内陆运常用值），最低计费重量 1.0 kg；
+   - 各区域的基础价和每公斤单价单独设置（例如跨州市区 A$13.50 + A$2.40/kg），可以单独调整，不影响 AusPost/StarTrack。
+   - 界面同样标注「Estimate (formula)」，并注明「No TNT price quote available … Estimated」。
+   - 考题允许「If it is not implemented … display the related Shipment Fee as A$0.00」；这里改为提供有依据的估算，而不是只显示 0，费率的假设性质在界面和 README 中都有说明。
+
+   以订单 2 的 TNT 包裹（Track 3）为例：HALGEO15 × 1、MCMW10 × 2、MCBO30 × 3，实重约 0.67 kg，低于最低计费重量，按 1.0 kg 计；Ryde NSW → Fitzroy VIC 属于跨州市区：13.50 + 2.40 × 1.0 = **A$15.90**。
 
 运费按 PDF 公式直接加到 Total 中（Total = Subtotal + GST + Shipment Fee），不对运费另计 GST。
 
@@ -249,7 +255,7 @@ PDF 允许「使用快递 API」或「基于重量和体积的合理公式」。
 | 一个订单有多个包裹、不同快递 | 以包裹为单位查询物流和计算运费 |
 | 浮点数误差 | `Decimal` + 金额以字符串传输 |
 | 在线图片大多是品牌 Logo 而非产品图，部分候选图是其他品牌的产品 | 只使用确认是该 SKU 的产品照片（4 个），其余用「Product N」占位图，并记录原因（见第 7 节） |
-| TNT 已并入 FedEx，RTT 接口和旧版 Weblinking 直链均已下线（404），提供的 TNT 凭证无处可用 | 实际调研并测试了生产环境和 UAT 环境；改为读取 TNT 公开跟踪页面，取得运单 305506914 的真实物流记录（已送达，签收人 Norton）；页面变化时显示「Unavailable」；TNT 运费按要求显示 A$0.00 |
+| TNT 已并入 FedEx，RTT 接口和旧版 Weblinking 直链均已下线（404），提供的 TNT 凭证无处可用 | 实际调研并测试了生产环境和 UAT 环境；改为读取 TNT 公开跟踪页面，取得运单 305506914 的真实物流记录（已送达，签收人 Norton）；页面变化时显示「Unavailable」；TNT 运费按包装用单独的 TNT 假设费率估算（第 6 节） |
 | 测试环境凭证返回 401 | 所有失败都显示为明确状态，运费回退到公式，并在第 5 节记录测试过程 |
 | 密钥安全（考题文件本身含有凭证） | `.env` + `.gitignore`（考题 PDF 和 HTML 也被排除）；前端无密钥；`/api/health` 只显示是否已配置 |
 | Windows 控制台 GBK 编码无法输出 `mm³` | 所有文件以 UTF-8 读取，控制台脚本强制 UTF-8 输出 |

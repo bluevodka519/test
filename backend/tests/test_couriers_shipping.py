@@ -7,7 +7,7 @@ import respx
 from app.couriers.auspost import AusPostClient, parse_track_response
 from app.models import Address, Carrier, FeeSource, TrackingStatus
 from app.services.products import parse_product
-from app.services.shipping import build_parcel, chargeable_kg, formula_fee, quote_shipment, zone_for
+from app.services.shipping import build_parcel, chargeable_kg, formula_fee, quote_shipment, rates_for, zone_for
 from conftest import BASE, product_row
 
 
@@ -191,8 +191,20 @@ def test_quote_falls_back_to_formula_on_api_error(configured, rates):
     assert "HTTP 500" in fee.note
 
 
-def test_tnt_fee_is_zero(configured, rates):
-    parcel, _ = build_parcel([(parse_product(product_row("A")), 1)], rates)
-    fee = asyncio.run(quote_shipment(Carrier.TNT, parcel, addr("VIC", "3065"), rates, AusPostClient(configured)))
-    assert fee.amount == Decimal("0.00")
-    assert fee.source == FeeSource.NOT_AVAILABLE
+def test_tnt_fee_is_estimated_from_the_parcel_with_tnt_rates(configured, rates):
+    tnt_rates = rates_for(rates, Carrier.TNT)
+    parcel, _ = build_parcel([(parse_product(product_row("A")), 1)], tnt_rates)  # 0.6 kg, min carton
+    with respx.mock(assert_all_called=False) as router:
+        fee = asyncio.run(quote_shipment(Carrier.TNT, parcel, addr("VIC", "3065"), rates, AusPostClient(configured)))
+        assert router.calls.call_count == 0  # never asks AusPost for a TNT price
+    assert fee.source == FeeSource.FORMULA_ESTIMATE
+    assert fee.chargeable_kg == Decimal("1.0")  # TNT minimum chargeable weight
+    assert fee.amount == Decimal("15.90")       # TNT interstate metro: 13.50 + 2.40 x 1.0
+    assert "TNT Road Express" in fee.note and "RTT" in fee.note
+
+
+def test_carrier_rates_override_defaults(rates):
+    tnt = rates_for(rates, Carrier.TNT)
+    assert tnt["minimum_chargeable_kg"] == 1.0 and tnt["zones"]["INTERSTATE_METRO"]["base"] == "13.50"
+    assert tnt["carton"] == rates["carton"]  # shared settings are kept
+    assert rates_for(rates, Carrier.STARTRACK)["zones"] == rates["zones"]  # no override -> defaults

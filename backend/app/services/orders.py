@@ -15,7 +15,7 @@ from app.models import (
 from app.services import pricing
 from app.services.loader import Dataset, close_order_no
 from app.services.products import Product, normalise_sku
-from app.services.shipping import build_parcel, quote_shipment
+from app.services.shipping import build_parcel, quote_shipment, rates_for
 
 
 def parse_quantity(raw) -> Optional[int]:
@@ -117,8 +117,9 @@ async def build_order(order: OrderIn, ds: Dataset, auspost: AusPostClient, tnt: 
     async def fee_for(ref: str):
         s = shipments_in[ref]
         items = [(p, q) for _, p, q in groups[ref] if p is not None]
-        parcel, notes = build_parcel(items, ds.rates)
-        fee = await quote_shipment(s.carrier if s else None, parcel, order.address, ds.rates, auspost)
+        carrier = s.carrier if s else None
+        parcel, notes = build_parcel(items, rates_for(ds.rates, carrier))
+        fee = await quote_shipment(carrier, parcel, order.address, ds.rates, auspost)
         if notes:
             fee.note = f"{fee.note} Parcel notes: {'; '.join(notes)}."
         return fee

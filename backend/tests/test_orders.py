@@ -59,11 +59,12 @@ def test_lines_grouped_into_shipments_per_tracking_ref(tmp_path, unconfigured):
     assert [len(s.lines) for s in d.shipments] == [2, 1]
     assert d.shipments[0].tracking.status == TrackingStatus.NOT_CONFIGURED
     assert d.shipments[1].tracking.status == TrackingStatus.NOT_CONFIGURED  # TNT network access off in tests
-    # TNT fee is always 0.00; StarTrack falls back to the formula when not configured.
-    assert d.shipments[1].fee.amount == Decimal("0.00")
-    assert d.shipments[1].fee.source == FeeSource.NOT_AVAILABLE
+    # Both parcels get a formula estimate: StarTrack because the API is not configured,
+    # TNT because no TNT price service exists; the order fee is their sum.
     assert d.shipments[0].fee.source == FeeSource.FORMULA_ESTIMATE
-    assert d.totals.shipment_fee == d.shipments[0].fee.amount
+    assert d.shipments[1].fee.source == FeeSource.FORMULA_ESTIMATE
+    assert "TNT Road Express" in d.shipments[1].fee.note
+    assert d.totals.shipment_fee == d.shipments[0].fee.amount + d.shipments[1].fee.amount
 
 
 def test_orders_are_independent(tmp_path, unconfigured):
